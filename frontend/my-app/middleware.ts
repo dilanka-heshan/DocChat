@@ -1,26 +1,12 @@
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
+// Temporarily disabled to fix re-rendering issues
+// import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  
-  try {
-    const supabase = createMiddlewareClient({ req, res })
-    
-    // Refresh session if expired - required for Server Components
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    // Optional: Add authentication logic here
-    // For now, just refresh the session and continue
-    await supabase.auth.getUser()
-    
-    return res
-  } catch (error) {
-    console.error('Middleware error:', error)
-    // If there's an error, continue without blocking
-    return res
-  }
+  // Simply pass through all requests without authentication checks
+  // This prevents the infinite re-rendering loop
+  return NextResponse.next()
 }
 
 export const config = {

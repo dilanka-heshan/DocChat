@@ -9,8 +9,14 @@ load_dotenv()
 
 security = HTTPBearer()
 
-# Initialize Supabase client
-supabase = create_client(
+# Initialize Supabase client for auth verification (using anon key)
+auth_supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_ANON_KEY")  # Use anon key for auth verification
+)
+
+# Initialize Supabase client for admin operations (using service role key)
+admin_supabase = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 )
@@ -23,8 +29,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         token = credentials.credentials
         
-        # Verify token with Supabase
-        response = supabase.auth.get_user(token)
+        # Verify token with Supabase using anon key
+        response = auth_supabase.auth.get_user(token)
         
         if response.user is None:
             raise HTTPException(
@@ -36,6 +42,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return response.user.id
     
     except Exception as e:
+        print(f"Auth error: {str(e)}")  # Add logging for debugging
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -48,7 +55,7 @@ def verify_user_owns_document(user_id: str, document_id: str) -> bool:
     Verify that the user owns the specified document
     """
     try:
-        response = supabase.table("documents").select("user_id").eq("id", document_id).execute()
+        response = admin_supabase.table("documents").select("user_id").eq("id", document_id).execute()
         
         if not response.data:
             return False
@@ -64,7 +71,7 @@ def verify_user_owns_documents(user_id: str, document_ids: list) -> bool:
     Verify that the user owns all specified documents
     """
     try:
-        response = supabase.table("documents").select("user_id").in_("id", document_ids).execute()
+        response = admin_supabase.table("documents").select("user_id").in_("id", document_ids).execute()
         
         if len(response.data) != len(document_ids):
             return False

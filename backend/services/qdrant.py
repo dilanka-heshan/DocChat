@@ -1,5 +1,5 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, MatchAny, PayloadSchemaType
 from typing import List, Dict, Optional
 import uuid
 from datetime import datetime
@@ -22,23 +22,104 @@ client = QdrantClient(
 
 async def ensure_collection_exists():
     """
-    Ensure the collection exists in Qdrant
+    Ensure the collection exists in Qdrant with proper indexes
     """
     try:
         collections = client.get_collections()
         collection_names = [col.name for col in collections.collections]
         
         if COLLECTION_NAME not in collection_names:
+            # Create collection
             client.create_collection(
                 collection_name=COLLECTION_NAME,
                 vectors_config=VectorParams(size=384, distance=Distance.COSINE),
             )
             print(f"Created collection: {COLLECTION_NAME}")
+            
+            # Create indexes for fields we filter on
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name="user_id",
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+            print("Created index for user_id")
+            
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name="document_id", 
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+            print("Created index for document_id")
+            
         else:
             print(f"Collection {COLLECTION_NAME} already exists")
+            
+            # Check if indexes exist, create them if they don't
+            try:
+                collection_info = client.get_collection(COLLECTION_NAME)
+                # Try to create indexes (they will be ignored if they already exist)
+                try:
+                    client.create_payload_index(
+                        collection_name=COLLECTION_NAME,
+                        field_name="user_id",
+                        field_schema=PayloadSchemaType.KEYWORD
+                    )
+                except:
+                    pass  # Index might already exist
+                    
+                try:
+                    client.create_payload_index(
+                        collection_name=COLLECTION_NAME,
+                        field_name="document_id",
+                        field_schema=PayloadSchemaType.KEYWORD
+                    )
+                except:
+                    pass  # Index might already exist
+            except:
+                pass
     
     except Exception as e:
         raise Exception(f"Failed to ensure collection exists: {str(e)}")
+
+
+async def create_required_indexes():
+    """
+    Force create required indexes for filtering
+    """
+    try:
+        print("Creating required indexes...")
+        
+        # Create user_id index
+        try:
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name="user_id",
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+            print("✓ Created index for user_id")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "index" in str(e).lower():
+                print("✓ Index for user_id already exists")
+            else:
+                print(f"Failed to create user_id index: {e}")
+        
+        # Create document_id index
+        try:
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name="document_id",
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+            print("✓ Created index for document_id")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "index" in str(e).lower():
+                print("✓ Index for document_id already exists")
+            else:
+                print(f"Failed to create document_id index: {e}")
+                
+    except Exception as e:
+        print(f"Error creating indexes: {e}")
+        # Don't raise exception, just log it
 
 
 async def store_document_chunks(
@@ -97,6 +178,10 @@ async def search_similar_chunks(
     Search for similar chunks in Qdrant
     """
     try:
+        # Ensure collection and indexes exist
+        await ensure_collection_exists()
+        await create_required_indexes()
+        
         # Build filter
         filter_conditions = [
             FieldCondition(key="user_id", match=MatchValue(value=user_id))
@@ -104,9 +189,21 @@ async def search_similar_chunks(
         
         if document_ids:
             # Filter by specific documents
-            filter_conditions.append(
-                FieldCondition(key="document_id", match=MatchValue(value=document_ids))
-            )
+            if isinstance(document_ids, list) and len(document_ids) > 1:
+                # Use MatchAny for multiple document IDs
+                filter_conditions.append(
+                    FieldCondition(key="document_id", match=MatchAny(any=document_ids))
+                )
+            elif isinstance(document_ids, list) and len(document_ids) == 1:
+                # Use MatchValue for single document ID
+                filter_conditions.append(
+                    FieldCondition(key="document_id", match=MatchValue(value=document_ids[0]))
+                )
+            else:
+                # If document_ids is a string, use MatchValue
+                filter_conditions.append(
+                    FieldCondition(key="document_id", match=MatchValue(value=document_ids))
+                )
         
         search_filter = Filter(must=filter_conditions)
         

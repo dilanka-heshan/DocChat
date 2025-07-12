@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -34,18 +34,8 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [documentsLoading, setDocumentsLoading] = useState(true)
 
-  // Load user documents
-  useEffect(() => {
-    console.log('Dashboard useEffect triggered:', { user: !!user, userId: user?.id })
-    if (user) {
-      console.log('Loading documents and initializing chat session...')
-      loadDocuments()
-      initializeChatSession()
-    }
-  }, [user])
-
-  const loadDocuments = async () => {
-    if (!user) return
+  const loadDocuments = useCallback(async () => {
+    if (!user?.id) return
 
     console.log('Loading documents for user:', user.id)
     setDocumentsLoading(true)
@@ -59,10 +49,10 @@ export default function Dashboard() {
       setDocuments(data || [])
     }
     setDocumentsLoading(false)
-  }
+  }, [user?.id])
 
-  const initializeChatSession = async () => {
-    if (!user) return
+  const initializeChatSession = useCallback(async () => {
+    if (!user?.id || currentSessionId) return // Don't reinitialize if session already exists
 
     console.log('Initializing chat session for user:', user.id)
     try {
@@ -94,7 +84,17 @@ export default function Dashboard() {
       console.error('Error initializing chat session:', error)
       setError("Failed to initialize chat session")
     }
-  }
+  }, [user?.id, currentSessionId])
+
+  // Load user documents
+  useEffect(() => {
+    console.log('Dashboard useEffect triggered:', { user: !!user, userId: user?.id })
+    if (user?.id) {
+      console.log('Loading documents and initializing chat session...')
+      loadDocuments()
+      initializeChatSession()
+    }
+  }, [user?.id]) // Only depend on user.id to prevent infinite loops
 
   const handleSendQuestion = async () => {
     if (!question.trim() || !user || !currentSessionId) return

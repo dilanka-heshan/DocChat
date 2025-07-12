@@ -27,21 +27,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     console.log('AuthProvider useEffect starting...')
     let isMounted = true
+    let initialized = false
     
     // Get initial session
     const getInitialSession = async () => {
+      if (initialized) return // Prevent multiple initializations
+      
       try {
+        console.log('Getting initial session...')
         const { data: { session }, error } = await supabase.auth.getSession()
         console.log('Initial session check:', { session: !!session, userId: session?.user?.id, error })
         
-        if (isMounted) {
+        if (error) {
+          console.error('Session error:', error)
+        }
+        
+        if (isMounted && !initialized) {
+          initialized = true
           setSession(session)
           setUser(session?.user ?? null)
           setLoading(false)
         }
       } catch (error) {
         console.error('Error getting initial session:', error)
-        if (isMounted) {
+        if (isMounted && !initialized) {
+          initialized = true
+          setSession(null)
+          setUser(null)
           setLoading(false)
         }
       }
@@ -53,28 +65,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', { event, session: !!session, userId: session?.user?.id, currentPath: window.location.pathname })
+      console.log('Auth state change:', { event, session: !!session, userId: session?.user?.id, currentPath: typeof window !== 'undefined' ? window.location.pathname : 'server' })
       
       if (!isMounted) return
       
       // Update state first
       setSession(session)
       setUser(session?.user ?? null)
-      setLoading(false)
+      if (!initialized) {
+        initialized = true
+        setLoading(false)
+      }
 
-      // Handle redirects after state update
-      if (event === "SIGNED_IN") {
-        console.log('SIGNED_IN event detected, redirecting to dashboard in 100ms...')
-        setTimeout(() => {
+      // Handle redirects after state update (only on client side)
+      if (typeof window !== 'undefined') {
+        if (event === "SIGNED_IN" && window.location.pathname !== '/dashboard') {
+          console.log('SIGNED_IN event detected, redirecting to dashboard...')
+          setTimeout(() => {
+            if (isMounted) {
+              console.log('Executing redirect now...')
+              window.location.replace('/dashboard')
+            }
+          }, 100)
+        } else if (event === "SIGNED_OUT" && window.location.pathname !== '/') {
+          console.log('SIGNED_OUT event detected, redirecting to home...')
           if (isMounted) {
-            console.log('Executing redirect now...')
-            window.location.replace('/dashboard')
+            router.push("/")
           }
-        }, 100)
-      } else if (event === "SIGNED_OUT") {
-        console.log('SIGNED_OUT event detected, redirecting to home...')
-        if (isMounted) {
-          router.push("/")
         }
       }
     })

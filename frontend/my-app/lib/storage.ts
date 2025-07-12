@@ -1,5 +1,7 @@
 import { supabase } from "./supabase"
 
+// Use the standard Supabase client for all storage operations
+
 export async function uploadFile(file: File, userId: string): Promise<{ path?: string; error?: string }> {
   try {
     console.log(`Starting file upload for user ${userId}, file: ${file.name}, size: ${file.size}`)
