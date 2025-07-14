@@ -64,11 +64,11 @@ async def update_document_status(document_id: str, status: str, error_message: O
 
 async def delete_document_metadata(document_id: str, user_id: str):
     """
-    Delete document metadata from database
+    Delete document metadata from Supabase database
     """
     try:
-        supabase.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
-    
+        response = supabase.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
+        return response
     except Exception as e:
         raise Exception(f"Failed to delete document metadata: {str(e)}")
 
@@ -122,11 +122,9 @@ async def delete_file_from_storage(file_path: str):
     Delete file from Supabase storage
     """
     try:
+        # Remove the file from the documents bucket
         response = supabase.storage.from_("documents").remove([file_path])
-        
-        if response.get("error"):
-            raise Exception(f"Storage deletion error: {response['error']}")
-    
+        return response
     except Exception as e:
         raise Exception(f"Failed to delete file from storage: {str(e)}")
 

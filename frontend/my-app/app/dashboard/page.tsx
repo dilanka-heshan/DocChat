@@ -7,14 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileText, Trash2, Send, User, Bot, Plus, Settings, LogOut, Menu, X, AlertCircle } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { FileText, Trash2, Send, User, Bot, Plus, Settings, LogOut, Menu, X, AlertCircle, CheckSquare, Square, UserCircle } from "lucide-react"
 import Link from "next/link"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { BackendStatus } from "@/components/backend-status"
 import { useAuth } from "@/lib/auth-context"
-import { getUserDocuments, deleteDocument, createChatSession, createMessage } from "@/lib/database"
-import { deleteFile } from "@/lib/storage"
-import { askQuestionToBackend, getDocumentsFromBackend, deleteDocumentFromBackend } from "@/lib/api"
+import { getUserDocuments, createChatSession, createMessage } from "@/lib/database"
+import { askQuestionToBackend, getDocumentsFromBackend, deleteDocumentFromBackend, deleteMultipleDocumentsFromBackend } from "@/lib/api"
 import type { Database } from "@/lib/supabase"
 
 type Document = Database["public"]["Tables"]["documents"]["Row"]
@@ -119,11 +118,17 @@ export default function Dashboard() {
     try {
       // Get completed documents for the query
       const completedDocs = selectedDocuments.length > 0 
-        ? selectedDocuments 
+        ? selectedDocuments.filter(docId => {
+            const doc = documents.find(d => d.id === docId)
+            return doc && doc.status === 'completed'
+          })
         : documents.filter(doc => doc.status === 'completed').map(doc => doc.id)
 
       if (completedDocs.length === 0) {
-        throw new Error("No completed documents available for querying")
+        const errorMsg = selectedDocuments.length > 0 
+          ? "None of the selected documents are ready for querying. Please ensure documents have been processed successfully."
+          : "No completed documents available for querying. Please upload and process documents first."
+        throw new Error(errorMsg)
       }
 
       // Call backend API
@@ -167,20 +172,73 @@ export default function Dashboard() {
 
   const handleDeleteDocument = async (document: Document) => {
     try {
-      // Delete from storage
-      await deleteFile(document.file_path)
+      // Use backend API to delete document completely (Qdrant vectors, Supabase storage, and database)
+      const result = await deleteDocumentFromBackend(document.id)
 
-      // Delete from database
-      const { error } = await deleteDocument(document.id)
-
-      if (error) {
-        setError(error)
-      } else {
+      if (result.success) {
         setDocuments((prev) => prev.filter((doc) => doc.id !== document.id))
+        // Remove from selected documents if it was selected
+        setSelectedDocuments((prev) => prev.filter((id) => id !== document.id))
+        setError(null) // Clear any previous errors
+      } else {
+        setError(result.error || "Failed to delete document")
       }
     } catch (error) {
       console.error("Error deleting document:", error)
       setError("Failed to delete document")
+    }
+  }
+
+  const handleDeleteSelectedDocuments = async () => {
+    if (selectedDocuments.length === 0) return
+    
+    try {
+      // Use backend API to delete multiple documents completely (Qdrant vectors, Supabase storage, and database)
+      const result = await deleteMultipleDocumentsFromBackend(selectedDocuments)
+
+      if (result.success) {
+        // Remove deleted documents from state
+        setDocuments((prev) => prev.filter((doc) => !selectedDocuments.includes(doc.id)))
+        // Clear selection
+        setSelectedDocuments([])
+        setError(null) // Clear any previous errors
+      } else {
+        setError(result.error || "Failed to delete selected documents")
+      }
+    } catch (error) {
+      console.error("Error deleting selected documents:", error)
+      setError("Failed to delete selected documents")
+    }
+  }
+
+  const handleDocumentSelection = (documentId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedDocuments((prev) => [...prev, documentId])
+    } else {
+      setSelectedDocuments((prev) => prev.filter((id) => id !== documentId))
+    }
+  }
+
+  const handleSelectAllDocuments = () => {
+    const completedDocIds = documents.filter(doc => doc.status === 'completed').map(doc => doc.id)
+    setSelectedDocuments(completedDocIds)
+  }
+
+  const handleClearSelection = () => {
+    setSelectedDocuments([])
+  }
+
+  const getSelectedDocumentsInfo = () => {
+    const completedDocs = documents.filter(doc => doc.status === 'completed')
+    const selectedCompletedDocs = selectedDocuments.filter(id => 
+      completedDocs.some(doc => doc.id === id)
+    )
+    
+    return {
+      total: completedDocs.length,
+      selected: selectedCompletedDocs.length,
+      allSelected: selectedCompletedDocs.length === completedDocs.length && completedDocs.length > 0,
+      noneSelected: selectedCompletedDocs.length === 0
     }
   }
 
@@ -229,24 +287,26 @@ export default function Dashboard() {
   console.log('Dashboard: Rendering main dashboard interface', { user: !!user, authLoading })
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
       <div
-        className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}
+        className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}
       >
-        <div className="flex items-center justify-between h-16 px-4 border-b">
-          <div className="flex items-center space-x-2">
+        {/* Header */}
+        <div className="flex items-center justify-between h-16 px-4 border-b flex-shrink-0">
+          <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
               <FileText className="w-5 h-5 text-white" />
             </div>
             <span className="text-lg font-semibold">DocChat</span>
-          </div>
+          </Link>
           <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="w-4 h-4" />
           </Button>
         </div>
 
-        <div className="p-4">
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-4">
           <Link href="/upload">
             <Button className="w-full mb-4">
               <Plus className="w-4 h-4 mr-2" />
@@ -256,9 +316,58 @@ export default function Dashboard() {
 
           <div className="space-y-4">
             <div>
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Your Documents ({documents.length})
-              </h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Your Documents ({documents.length})
+                </h3>
+                {documents.filter(doc => doc.status === 'completed').length > 0 && (
+                  <div className="flex space-x-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSelectAllDocuments}
+                      className="text-xs px-2 py-1 h-6"
+                    >
+                      <CheckSquare className="w-3 h-3 mr-1" />
+                      All
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearSelection}
+                      className="text-xs px-2 py-1 h-6"
+                    >
+                      <Square className="w-3 h-3 mr-1" />
+                      None
+                    </Button>
+                    {selectedDocuments.length > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteSelectedDocuments}
+                        className="text-xs px-2 py-1 h-6"
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" />
+                        Delete ({selectedDocuments.length})
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {(() => {
+                const selectionInfo = getSelectedDocumentsInfo()
+                return selectionInfo.total > 0 && (
+                  <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-950 rounded-md">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      {selectionInfo.noneSelected 
+                        ? `All ${selectionInfo.total} completed documents will be used`
+                        : `${selectionInfo.selected} of ${selectionInfo.total} documents selected`
+                      }
+                    </p>
+                  </div>
+                )
+              })()}
 
               {error && (
                 <Alert variant="destructive" className="mb-4">
@@ -287,8 +396,19 @@ export default function Dashboard() {
                   </Card>
                 ) : (
                   documents.map((doc) => (
-                    <Card key={doc.id} className="p-3">
-                      <div className="flex items-start justify-between">
+                    <Card key={doc.id} className={`p-3 ${selectedDocuments.includes(doc.id) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950' : ''}`}>
+                      <div className="flex items-start space-x-3">
+                        {/* Document Selection Checkbox */}
+                        <div className="flex-shrink-0 mt-1">
+                          <Checkbox
+                            checked={selectedDocuments.includes(doc.id)}
+                            onCheckedChange={(checked) => handleDocumentSelection(doc.id, checked as boolean)}
+                            disabled={doc.status !== 'completed'}
+                            className="w-4 h-4"
+                          />
+                        </div>
+                        
+                        {/* Document Info */}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{doc.name}</p>
                           <div className="flex items-center space-x-2 mt-1">
@@ -317,11 +437,13 @@ export default function Dashboard() {
                             </p>
                           )}
                         </div>
+                        
+                        {/* Delete Button */}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDeleteDocument(doc)}
-                          className="text-red-500 hover:text-red-700"
+                          className="text-red-500 hover:text-red-700 flex-shrink-0"
                         >
                           <Trash2 className="w-3 h-3" />
                         </Button>
@@ -334,27 +456,41 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
-          <div className="flex items-center justify-between">
+        {/* Bottom Action Buttons - Always Visible */}
+        <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-gray-800">
+          <div className="space-y-2">
+            {/* Profile Button */}
             <Link href="/profile">
-              <Button variant="ghost" size="sm">
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <UserCircle className="w-4 h-4 mr-2" />
+                Profile
               </Button>
             </Link>
-            <BackendStatus />
-            <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={signOut}>
-              <LogOut className="w-4 h-4" />
+            
+            {/* Settings and Theme Row */}
+            <div className="flex items-center justify-between space-x-2">
+              <Link href="/profile">
+                <Button variant="ghost" size="sm" className="flex-1">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </Button>
+              </Link>
+              <ThemeToggle />
+            </div>
+            
+            {/* Sign Out Button */}
+            <Button variant="outline" size="sm" onClick={signOut} className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950">
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
             </Button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-screen">
         {/* Header */}
-        <header className="bg-white dark:bg-gray-800 border-b px-4 py-3">
+        <header className="bg-white dark:bg-gray-800 border-b px-4 py-3 sticky top-0 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
@@ -364,14 +500,22 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="outline">{documents.length} documents</Badge>
+              {(() => {
+                const selectionInfo = getSelectedDocumentsInfo()
+                return selectionInfo.total > 0 && !selectionInfo.noneSelected && (
+                  <Badge variant="secondary">
+                    {selectionInfo.selected} selected
+                  </Badge>
+                )
+              })()}
               <span className="text-sm text-gray-500">Welcome, {user.email}</span>
             </div>
           </div>
         </header>
 
         {/* Chat Interface */}
-        <div className="flex-1 flex flex-col">
-          <ScrollArea className="flex-1 p-4">
+        <div className="flex-1 flex flex-col pb-20">
+          <div className="flex-1 p-4 overflow-y-auto">
             <div className="space-y-4 max-w-4xl mx-auto">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -434,10 +578,10 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Input Area */}
-          <div className="border-t bg-white dark:bg-gray-800 p-4">
+          <div className="border-t bg-white dark:bg-gray-800 p-4 sticky bottom-0 z-10">
             <div className="max-w-4xl mx-auto">
               {documents.length === 0 ? (
                 <div className="text-center py-4">
@@ -447,22 +591,61 @@ export default function Dashboard() {
                   </Link>
                 </div>
               ) : (
-                <div className="flex space-x-2">
-                  <Textarea
-                    placeholder="Ask a question about your documents..."
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    className="flex-1 min-h-[60px] resize-none"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault()
-                        handleSendQuestion()
-                      }
-                    }}
-                  />
-                  <Button onClick={handleSendQuestion} disabled={!question.trim() || isLoading} className="self-end">
-                    <Send className="w-4 h-4" />
-                  </Button>
+                <div className="space-y-3">
+                  {(() => {
+                    const selectionInfo = getSelectedDocumentsInfo()
+                    if (selectionInfo.total === 0) {
+                      return (
+                        <div className="text-center py-4">
+                          <p className="text-gray-500 mb-2">No completed documents available for querying</p>
+                          <p className="text-sm text-gray-400">Please wait for documents to finish processing</p>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <>
+                        {/* Document Selection Info */}
+                        <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-lg px-3 py-2">
+                          <span>
+                            {selectionInfo.noneSelected 
+                              ? `Querying all ${selectionInfo.total} completed documents`
+                              : `Querying ${selectionInfo.selected} selected documents`
+                            }
+                          </span>
+                          {!selectionInfo.noneSelected && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleClearSelection}
+                              className="text-xs px-2 py-1 h-6"
+                            >
+                              Use all documents
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="flex space-x-2">
+                          <Textarea
+                            placeholder="Ask a question about your documents..."
+                            value={question}
+                            onChange={(e) => setQuestion(e.target.value)}
+                            className="flex-1 min-h-[60px] resize-none"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault()
+                                handleSendQuestion()
+                              }
+                            }}
+                          />
+                          <Button onClick={handleSendQuestion} disabled={!question.trim() || isLoading} className="self-end">
+                            <Send className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </>
+                    )
+                  })()}
                 </div>
               )}
               <p className="text-xs text-gray-500 mt-2">Press Enter to send, Shift+Enter for new line</p>

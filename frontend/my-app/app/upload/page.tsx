@@ -11,9 +11,8 @@ import Link from "next/link"
 import { useDropzone } from "react-dropzone"
 import { useAuth } from "@/lib/auth-context"
 import { createDocument, updateDocument } from "@/lib/database"
-import { uploadFile as uploadToStorage, checkStorageBucket } from "@/lib/storage"
+import { uploadFile as uploadToStorage } from "@/lib/storage"
 import { processDocumentWithBackend } from "@/lib/api"
-import { StorageTester } from "@/components/storage-tester"
 
 interface UploadFile {
   id: string
@@ -27,21 +26,6 @@ interface UploadFile {
 export default function UploadPage() {
   const { user } = useAuth()
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([])
-  const [storageError, setStorageError] = useState<string | null>(null)
-
-  // Check storage bucket on component mount
-  useEffect(() => {
-    const checkStorage = async () => {
-      const { exists, error } = await checkStorageBucket()
-      if (!exists) {
-        setStorageError(error || "Storage bucket is not available")
-      }
-    }
-
-    if (user) {
-      checkStorage()
-    }
-  }, [user])
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -71,7 +55,7 @@ export default function UploadPage() {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
       "text/plain": [".txt"],
     },
-    maxSize: 10 * 1024 , // 1MB
+    maxSize: 10 * 1024 * 1024, // 10MB
     multiple: true,
   })
 
@@ -241,23 +225,6 @@ export default function UploadPage() {
       </header>
 
       <div className="max-w-4xl mx-auto p-6">
-        {/* Storage Test Component - Remove after setup is working */}
-        <div className="mb-6">
-          <StorageTester />
-        </div>
-
-        {/* Storage Error Alert */}
-        {storageError && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Storage Error:</strong> {storageError}
-              <br />
-              <small>Please check your Supabase Storage configuration or contact support.</small>
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Upload Area */}
         <Card className="mb-8">
           <CardHeader>

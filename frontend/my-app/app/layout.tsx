@@ -8,9 +8,9 @@ import { AuthProvider } from "@/lib/auth-context"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "DocuChat - AI Document Q&A System",
+  title: "DocChat - AI Document Q&A System",
   description: "Upload documents and ask questions with AI-powered answers",
-    generator: 'v0.dev'
+  keywords: ["AI", "Document Q&A", "Chatbot", "RAG", "Next.js", "Supabase"],
 }
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
       </body>

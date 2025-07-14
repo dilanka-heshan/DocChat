@@ -12,8 +12,8 @@ import { ArrowLeft, User, FileText, MessageSquare, Trash2, AlertTriangle, Shield
 import Link from "next/link"
 
 import { useAuth } from "@/lib/auth-context"
-import { getUserStats, deleteDocument, getUserDocuments } from "@/lib/database"
-import { deleteFile } from "@/lib/storage"
+import { getUserStats, getUserDocuments } from "@/lib/database"
+import { deleteMultipleDocumentsFromBackend } from "@/lib/api"
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth()
@@ -56,13 +56,11 @@ export default function ProfilePage() {
     if (!user) return
 
     try {
-      // First delete all user documents and files
+      // First delete all user documents using backend API (removes from Qdrant, storage, and database)
       const { data: documents } = await getUserDocuments(user.id)
-      if (documents) {
-        for (const doc of documents) {
-          await deleteFile(doc.file_path)
-          await deleteDocument(doc.id)
-        }
+      if (documents && documents.length > 0) {
+        const documentIds = documents.map(doc => doc.id)
+        await deleteMultipleDocumentsFromBackend(documentIds)
       }
 
       // Sign out user (Supabase handles account deletion via admin API)
@@ -76,12 +74,11 @@ export default function ProfilePage() {
     if (!user) return
 
     try {
+      // Delete all user documents using backend API (removes from Qdrant, storage, and database)
       const { data: documents } = await getUserDocuments(user.id)
-      if (documents) {
-        for (const doc of documents) {
-          await deleteFile(doc.file_path)
-          await deleteDocument(doc.id)
-        }
+      if (documents && documents.length > 0) {
+        const documentIds = documents.map(doc => doc.id)
+        await deleteMultipleDocumentsFromBackend(documentIds)
       }
 
       // Reload stats
