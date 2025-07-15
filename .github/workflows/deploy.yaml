@@ -99,11 +99,12 @@ jobs:
           echo "⚙️ Creating environment file..."
           cat > .env << ENVEOF
         SUPABASE_URL=$1
-        SUPABASE_SERVICE_ROLE_KEY=$2
-        QDRANT_URL=$3
-        QDRANT_API_KEY=$4
-        HUGGINGFACE_API_KEY=$5
-        GEMINI_API_KEY=$6
+        SUPABASE_ANON_KEY=$2
+        SUPABASE_SERVICE_ROLE_KEY=$3
+        QDRANT_URL=$4
+        QDRANT_API_KEY=$5
+        HUGGINGFACE_API_KEY=$6
+        GEMINI_API_KEY=$7
         ENVIRONMENT=production
         PORT=8000
         ALLOWED_ORIGINS=*
@@ -188,6 +189,7 @@ jobs:
         ssh -i ec2-key.pem -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} \
           "bash ~/deploy-remote.sh \
           '${{ secrets.SUPABASE_URL }}' \
+          '${{ secrets.SUPABASE_ANON_KEY }}' \
           '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}' \
           '${{ secrets.QDRANT_URL }}' \
           '${{ secrets.QDRANT_API_KEY }}' \

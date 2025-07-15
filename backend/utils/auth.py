@@ -9,10 +9,10 @@ load_dotenv()
 
 security = HTTPBearer()
 
-# Initialize Supabase client for auth verification (using anon key)
+# Initialize Supabase client for auth verification (using anon key or fallback to service key)
 auth_supabase = create_client(
     os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_ANON_KEY")  # Use anon key for auth verification
+    os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Fallback to service key if anon key not available
 )
 
 # Initialize Supabase client for admin operations (using service role key)
