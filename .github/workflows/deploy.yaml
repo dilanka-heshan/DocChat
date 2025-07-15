@@ -78,6 +78,7 @@ jobs:
         fi
         
         # Activate virtual environment and install dependencies
+        cd $APP_DIR
         source venv/bin/activate
         echo "📦 Installing dependencies..."
         pip install --upgrade pip
