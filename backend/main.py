@@ -97,7 +97,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://doc-chat-lyart.vercel.app/",  # All Vercel deployments
+        "https://doc-chat-lyart.vercel.app",  # All Vercel deployments
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
