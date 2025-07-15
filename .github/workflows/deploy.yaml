@@ -72,8 +72,18 @@ jobs:
         tar -xzf ~/backend-deployment.tar.gz
         
         # Set up virtual environment
+        echo "🐍 Setting up Python virtual environment..."
         if [ ! -d "venv" ]; then
-          echo "🐍 Creating virtual environment..."
+          echo "Creating new virtual environment..."
+          python3 -m venv venv
+        else
+          echo "Virtual environment already exists"
+        fi
+        
+        # Verify virtual environment exists before activation
+        if [ ! -f "venv/bin/activate" ]; then
+          echo "❌ Virtual environment activation script not found, recreating..."
+          rm -rf venv
           python3 -m venv venv
         fi
         
