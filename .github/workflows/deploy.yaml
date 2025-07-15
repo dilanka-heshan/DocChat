@@ -196,13 +196,6 @@ jobs:
           '${{ secrets.HUGGINGFACE_API_KEY }}' \
           '${{ secrets.GEMINI_API_KEY }}'"
     
-    - name: Cleanup
-      if: always()
-      run: |
-        rm -f ec2-key.pem
-        rm -f backend-deployment.tar.gz
-        rm -f deploy-remote.sh
-    
     - name: Post-deployment verification
       run: |
         echo "🔍 Verifying deployment..."
@@ -223,6 +216,13 @@ jobs:
         # Get service status
         ssh -i ec2-key.pem -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} \
           "sudo systemctl status docchat --no-pager"
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f ec2-key.pem
+        rm -f backend-deployment.tar.gz
+        rm -f deploy-remote.sh
 
   notify:
     needs: deploy
