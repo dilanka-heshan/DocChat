@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://13.48.43.175:8000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://api.docchat.dilankah.com"
 
 // Types
 interface APIResponse<T = any> {
