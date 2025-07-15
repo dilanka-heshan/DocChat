@@ -50,7 +50,7 @@ jobs:
         if [ -d "$APP_DIR" ]; then
           BACKUP_NAME="backup-$(date +%Y%m%d-%H%M%S)"
           echo "📦 Creating backup: $BACKUP_NAME"
-          sudo cp -r $APP_DIR "$BACKUP_DIR/$BACKUP_NAME"
+          sudo rsync -a --exclude='backups' $APP_DIR/ "$BACKUP_DIR/$BACKUP_NAME"
           
           # Keep only last 5 backups
           sudo ls -t $BACKUP_DIR | tail -n +6 | sudo xargs -r -I {} rm -rf "$BACKUP_DIR/{}"
