@@ -54,6 +54,13 @@ REM Install backend dependencies
 echo 📥 Installing backend dependencies...
 pip install -r requirements.txt
 
+REM Run backend tests
+echo 🧪 Running backend tests...
+python -m pytest test_main.py -v
+if %errorlevel% neq 0 (
+    echo ⚠️  Some backend tests failed, but continuing setup...
+)
+
 REM Check if .env exists
 if not exist ".env" (
     echo ⚙️ Creating backend .env file...

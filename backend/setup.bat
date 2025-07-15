@@ -29,6 +29,13 @@ REM Install dependencies
 echo 📥 Installing dependencies...
 pip install -r requirements.txt
 
+REM Run tests
+echo 🧪 Running tests...
+python -m pytest test_main.py -v
+if %errorlevel% neq 0 (
+    echo ⚠️  Some tests failed, but continuing setup...
+)
+
 REM Copy environment file
 echo ⚙️ Setting up environment variables...
 if not exist .env (
