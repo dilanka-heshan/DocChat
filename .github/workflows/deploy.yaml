@@ -1,0 +1,257 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio httpx
+    
+    - name: Run tests
+      run: |
+        cd backend
+        python -m pytest test_main.py -v
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Prepare deployment files
+      run: |
+        # Create deployment package
+        tar -czf backend-deployment.tar.gz -C backend .
+        
+        # Prepare deployment script
+        cat > deploy-remote.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        APP_DIR="/opt/docChat"
+        SERVICE_NAME="docchat"
+        BACKUP_DIR="/opt/docChat/backups"
+        
+        echo "🚀 Starting deployment process..."
+        
+        # Create backup directory
+        sudo mkdir -p $BACKUP_DIR
+        
+        # Backup current deployment if exists
+        if [ -d "$APP_DIR" ]; then
+          BACKUP_NAME="backup-$(date +%Y%m%d-%H%M%S)"
+          echo "📦 Creating backup: $BACKUP_NAME"
+          sudo cp -r $APP_DIR "$BACKUP_DIR/$BACKUP_NAME"
+          
+          # Keep only last 5 backups
+          sudo ls -t $BACKUP_DIR | tail -n +6 | sudo xargs -r -I {} rm -rf "$BACKUP_DIR/{}"
+        fi
+        
+        # Stop existing service
+        if sudo systemctl is-active --quiet $SERVICE_NAME; then
+          echo "🛑 Stopping existing service..."
+          sudo systemctl stop $SERVICE_NAME
+        fi
+        
+        # Create app directory
+        sudo mkdir -p $APP_DIR
+        sudo chown ubuntu:ubuntu $APP_DIR
+        
+        # Extract new deployment
+        echo "📦 Extracting deployment package..."
+        cd $APP_DIR
+        tar -xzf ~/backend-deployment.tar.gz
+        
+        # Set up virtual environment
+        if [ ! -d "venv" ]; then
+          echo "🐍 Creating virtual environment..."
+          python3 -m venv venv
+        fi
+        
+        # Activate virtual environment and install dependencies
+        source venv/bin/activate
+        echo "📦 Installing dependencies..."
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        
+        # Create .env file from secrets if it doesn't exist
+        if [ ! -f .env ]; then
+          echo "⚙️ Creating environment file..."
+          cat > .env << ENVEOF
+        SUPABASE_URL=$1
+        SUPABASE_SERVICE_ROLE_KEY=$2
+        QDRANT_URL=$3
+        QDRANT_API_KEY=$4
+        HUGGINGFACE_API_KEY=$5
+        GEMINI_API_KEY=$6
+        ENVIRONMENT=production
+        PORT=8000
+        ALLOWED_ORIGINS=*
+        ENVEOF
+        fi
+        
+        # Test the application
+        echo "🧪 Testing application..."
+        python -c "import main; print('✅ Application imports successfully')"
+        
+        # Create or update systemd service
+        sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << SERVICEEOF
+        [Unit]
+        Description=DocChat FastAPI Backend
+        After=network.target
+        
+        [Service]
+        Type=simple
+        User=ubuntu
+        WorkingDirectory=$APP_DIR
+        Environment=PATH=$APP_DIR/venv/bin
+        ExecStart=$APP_DIR/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+        Restart=always
+        RestartSec=10
+        StandardOutput=journal
+        StandardError=journal
+        
+        [Install]
+        WantedBy=multi-user.target
+        SERVICEEOF
+        
+        # Reload systemd and start service
+        echo "🔄 Reloading systemd and starting service..."
+        sudo systemctl daemon-reload
+        sudo systemctl enable $SERVICE_NAME
+        sudo systemctl start $SERVICE_NAME
+        
+        # Wait for service to start
+        sleep 5
+        
+        # Check service status
+        if sudo systemctl is-active --quiet $SERVICE_NAME; then
+          echo "✅ Service started successfully"
+          echo "🌐 Application should be available at http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
+        else
+          echo "❌ Service failed to start"
+          sudo systemctl status $SERVICE_NAME
+          exit 1
+        fi
+        
+        # Health check
+        echo "🏥 Performing health check..."
+        sleep 10
+        if curl -f http://localhost:8000/health; then
+          echo "✅ Health check passed"
+        else
+          echo "⚠️ Health check failed, but service is running"
+        fi
+        
+        echo "🎉 Deployment completed successfully!"
+        EOF
+        
+        chmod +x deploy-remote.sh
+    
+    - name: Copy files to EC2
+      run: |
+        # Add EC2 host to known hosts
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_HOST_KEY }}" >> ~/.ssh/known_hosts
+        
+        # Copy deployment package and script
+        echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
+        chmod 600 ec2-key.pem
+        
+        scp -i ec2-key.pem -o StrictHostKeyChecking=no \
+          backend-deployment.tar.gz \
+          deploy-remote.sh \
+          ubuntu@${{ secrets.EC2_HOST }}:~/
+    
+    - name: Deploy on EC2
+      run: |
+        ssh -i ec2-key.pem -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} \
+          "bash ~/deploy-remote.sh \
+          '${{ secrets.SUPABASE_URL }}' \
+          '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}' \
+          '${{ secrets.QDRANT_URL }}' \
+          '${{ secrets.QDRANT_API_KEY }}' \
+          '${{ secrets.HUGGINGFACE_API_KEY }}' \
+          '${{ secrets.GEMINI_API_KEY }}'"
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f ec2-key.pem
+        rm -f backend-deployment.tar.gz
+        rm -f deploy-remote.sh
+    
+    - name: Post-deployment verification
+      run: |
+        echo "🔍 Verifying deployment..."
+        
+        # Wait a bit for service to fully start
+        sleep 15
+        
+        # Test API endpoints
+        HEALTH_CHECK=$(ssh -i ec2-key.pem -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} \
+          "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health" || echo "000")
+        
+        if [ "$HEALTH_CHECK" = "200" ]; then
+          echo "✅ Health check endpoint responding correctly"
+        else
+          echo "⚠️ Health check returned: $HEALTH_CHECK"
+        fi
+        
+        # Get service status
+        ssh -i ec2-key.pem -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} \
+          "sudo systemctl status docchat --no-pager"
+
+  notify:
+    needs: [test, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Notify deployment status
+      run: |
+        if [ "${{ needs.deploy.result }}" = "success" ]; then
+          echo "🎉 Deployment successful!"
+          echo "Backend is now running on EC2 instance"
+        else
+          echo "❌ Deployment failed!"
+          echo "Check the logs for more details"
+        fi
