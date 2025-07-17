@@ -100,6 +100,8 @@ app.add_middleware(
         "https://doc-chat-lyart.vercel.app",
         "https://doc-chat-bhdilanka-gmailcoms-projects.vercel.app",
         "https://doc-chat-git-main-bhdilanka-gmailcoms-projects.vercel.app",
+        "https://docchat.dilankah.com",
+        "https://www.docchat.dilankah.com"
         "localhost:3000",  # Local development
         "http://localhost:3000",  # Local development with HTTP
     ],
