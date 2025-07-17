@@ -32,6 +32,15 @@ export default function Dashboard() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [documentsLoading, setDocumentsLoading] = useState(true)
+  const [showUploadAlert, setShowUploadAlert] = useState(false)
+
+  // Check for active uploads on mount
+  useEffect(() => {
+    const activeUploads = localStorage.getItem('docChat_active_uploads')
+    if (activeUploads === 'true') {
+      setShowUploadAlert(true)
+    }
+  }, [])
 
   const loadDocuments = useCallback(async () => {
     if (!user?.id) return
@@ -290,7 +299,7 @@ export default function Dashboard() {
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
       <div
-        className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}
+        className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-72 sm:w-64 bg-white dark:bg-gray-800 border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}
       >
         {/* Header */}
         <div className="flex items-center justify-between h-16 px-4 border-b flex-shrink-0">
@@ -298,7 +307,7 @@ export default function Dashboard() {
             <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
               <FileText className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-semibold">DocChat</span>
+            <span className="text-lg font-semibold hidden sm:inline">DocChat</span>
           </Link>
           <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="w-4 h-4" />
@@ -321,34 +330,35 @@ export default function Dashboard() {
                   Your Documents ({documents.length})
                 </h3>
                 {documents.filter(doc => doc.status === 'completed').length > 0 && (
-                  <div className="flex space-x-1">
+                  <div className="flex flex-wrap gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={handleSelectAllDocuments}
-                      className="text-xs px-2 py-1 h-6"
+                      className="text-xs px-1 sm:px-2 py-1 h-6"
                     >
-                      <CheckSquare className="w-3 h-3 mr-1" />
-                      All
+                      <CheckSquare className="w-3 h-3 sm:mr-1" />
+                      <span className="hidden sm:inline">All</span>
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={handleClearSelection}
-                      className="text-xs px-2 py-1 h-6"
+                      className="text-xs px-1 sm:px-2 py-1 h-6"
                     >
-                      <Square className="w-3 h-3 mr-1" />
-                      None
+                      <Square className="w-3 h-3 sm:mr-1" />
+                      <span className="hidden sm:inline">None</span>
                     </Button>
                     {selectedDocuments.length > 0 && (
                       <Button
                         variant="destructive"
                         size="sm"
                         onClick={handleDeleteSelectedDocuments}
-                        className="text-xs px-2 py-1 h-6"
+                        className="text-xs px-1 sm:px-2 py-1 h-6"
                       >
-                        <Trash2 className="w-3 h-3 mr-1" />
-                        Delete ({selectedDocuments.length})
+                        <Trash2 className="w-3 h-3 sm:mr-1" />
+                        <span className="hidden sm:inline">Delete ({selectedDocuments.length})</span>
+                        <span className="sm:hidden">Del</span>
                       </Button>
                     )}
                   </div>
@@ -359,7 +369,7 @@ export default function Dashboard() {
                 const selectionInfo = getSelectedDocumentsInfo()
                 return selectionInfo.total > 0 && (
                   <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-950 rounded-md">
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                    <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
                       {selectionInfo.noneSelected 
                         ? `All ${selectionInfo.total} completed documents will be used`
                         : `${selectionInfo.selected} of ${selectionInfo.total} documents selected`
@@ -373,6 +383,32 @@ export default function Dashboard() {
                 <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {showUploadAlert && (
+                <Alert className="mb-4 border-blue-200 bg-blue-50 dark:bg-blue-950">
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span className="text-blue-800 dark:text-blue-200">
+                      You have active uploads in progress. Check the upload page to monitor their status.
+                    </span>
+                    <div className="flex gap-2 ml-2">
+                      <Link href="/upload">
+                        <Button variant="outline" size="sm" className="text-xs">
+                          View Uploads
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowUploadAlert(false)}
+                        className="text-xs"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -410,8 +446,8 @@ export default function Dashboard() {
                         
                         {/* Document Info */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{doc.name}</p>
-                          <div className="flex items-center space-x-2 mt-1">
+                          <p className="text-sm font-medium truncate pr-2">{doc.name}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
                             <Badge
                               variant={
                                 doc.status === "completed"
@@ -457,11 +493,11 @@ export default function Dashboard() {
         </div>
 
         {/* Bottom Action Buttons - Always Visible */}
-        <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-gray-800">
+        <div className="flex-shrink-0 p-3 sm:p-4 border-t bg-white dark:bg-gray-800">
           <div className="space-y-2">
             {/* Profile Button */}
             <Link href="/profile">
-              <Button variant="outline" size="sm" className="w-full justify-start">
+              <Button variant="outline" size="sm" className="w-full justify-start text-sm">
                 <UserCircle className="w-4 h-4 mr-2" />
                 Profile
               </Button>
@@ -469,17 +505,17 @@ export default function Dashboard() {
             
             {/* Settings and Theme Row */}
             <div className="flex items-center justify-between space-x-2">
-              <Link href="/profile">
-                <Button variant="ghost" size="sm" className="flex-1">
+              <Link href="/profile" className="flex-1">
+                <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
                   <Settings className="w-4 h-4 mr-2" />
-                  Settings
+                  <span className="hidden sm:inline">Settings</span>
                 </Button>
               </Link>
               <ThemeToggle />
             </div>
             
             {/* Sign Out Button */}
-            <Button variant="outline" size="sm" onClick={signOut} className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950">
+            <Button variant="outline" size="sm" onClick={signOut} className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 text-sm">
               <LogOut className="w-4 h-4 mr-2" />
               Sign Out
             </Button>
@@ -498,29 +534,29 @@ export default function Dashboard() {
               </Button>
               <h1 className="text-xl font-semibold">Dashboard</h1>
             </div>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline">{documents.length} documents</Badge>
+            <div className="flex items-center space-x-2 overflow-hidden">
+              <Badge variant="outline" className="hidden sm:inline-flex">{documents.length} documents</Badge>
               {(() => {
                 const selectionInfo = getSelectedDocumentsInfo()
                 return selectionInfo.total > 0 && !selectionInfo.noneSelected && (
-                  <Badge variant="secondary">
+                  <Badge variant="secondary" className="hidden sm:inline-flex">
                     {selectionInfo.selected} selected
                   </Badge>
                 )
               })()}
-              <span className="text-sm text-gray-500">Welcome, {user.email}</span>
+              <span className="text-sm text-gray-500 truncate max-w-40 sm:max-w-none">Welcome, {user.email}</span>
             </div>
           </div>
         </header>
 
         {/* Chat Interface */}
-        <div className="flex-1 flex flex-col pb-20">
-          <div className="flex-1 p-4 overflow-y-auto">
+        <div className="flex-1 flex flex-col pb-16 sm:pb-20">
+          <div className="flex-1 p-2 sm:p-4 overflow-y-auto">
             <div className="space-y-4 max-w-4xl mx-auto">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`flex max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                    <div className={`flex-shrink-0 ${message.role === "user" ? "ml-3" : "mr-3"}`}>
+                  <div className={`flex max-w-[85%] sm:max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                    <div className={`flex-shrink-0 ${message.role === "user" ? "ml-2 sm:ml-3" : "mr-2 sm:mr-3"}`}>
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center ${
                           message.role === "user" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-gray-700"
@@ -534,15 +570,17 @@ export default function Dashboard() {
                         message.role === "user" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 border"
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
+                      <p className="text-sm leading-relaxed break-words">{message.content}</p>
                       {message.sources && message.sources.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Sources:</p>
-                          {message.sources.map((source, index) => (
-                            <Badge key={index} variant="outline" className="text-xs mr-1 mb-1">
-                              {source}
-                            </Badge>
-                          ))}
+                          <div className="flex flex-wrap gap-1">
+                            {message.sources.map((source, index) => (
+                              <Badge key={index} variant="outline" className="text-xs">
+                                {source}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       )}
                       <p className="text-xs opacity-70 mt-1">
@@ -556,7 +594,7 @@ export default function Dashboard() {
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="flex">
-                    <div className="mr-3">
+                    <div className="mr-2 sm:mr-3">
                       <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                         <Bot className="w-4 h-4" />
                       </div>
@@ -581,7 +619,7 @@ export default function Dashboard() {
           </div>
 
           {/* Input Area */}
-          <div className="border-t bg-white dark:bg-gray-800 p-4 sticky bottom-0 z-10">
+          <div className="border-t bg-white dark:bg-gray-800 p-3 sm:p-4 sticky bottom-0 z-10">
             <div className="max-w-4xl mx-auto">
               {documents.length === 0 ? (
                 <div className="text-center py-4">
@@ -607,7 +645,7 @@ export default function Dashboard() {
                       <>
                         {/* Document Selection Info */}
                         <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-lg px-3 py-2">
-                          <span>
+                          <span className="flex-1 text-xs sm:text-sm">
                             {selectionInfo.noneSelected 
                               ? `Querying all ${selectionInfo.total} completed documents`
                               : `Querying ${selectionInfo.selected} selected documents`
@@ -618,9 +656,9 @@ export default function Dashboard() {
                               variant="ghost"
                               size="sm"
                               onClick={handleClearSelection}
-                              className="text-xs px-2 py-1 h-6"
+                              className="text-xs px-2 py-1 h-6 ml-2 flex-shrink-0"
                             >
-                              Use all documents
+                              Use all
                             </Button>
                           )}
                         </div>
@@ -631,7 +669,7 @@ export default function Dashboard() {
                             placeholder="Ask a question about your documents..."
                             value={question}
                             onChange={(e) => setQuestion(e.target.value)}
-                            className="flex-1 min-h-[60px] resize-none"
+                            className="flex-1 min-h-[60px] resize-none text-sm"
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault()
