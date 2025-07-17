@@ -98,6 +98,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://doc-chat-lyart.vercel.app",  # All Vercel deployments
+        "localhost:3000",  # Local development
+        "http://localhost:3000",  # Local development with HTTP
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],

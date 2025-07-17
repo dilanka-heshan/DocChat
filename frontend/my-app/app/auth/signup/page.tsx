@@ -61,7 +61,7 @@ export default function SignupPage() {
           <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mr-3">
             <FileText className="w-6 h-6 text-white" />
           </div>
-          <span className="text-2xl font-bold">DocuChat</span>
+          <span className="text-2xl font-bold">DocChat</span>
         </div>
 
         <Card className="border-0 shadow-xl">
