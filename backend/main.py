@@ -97,7 +97,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://doc-chat-lyart.vercel.app",  # All Vercel deployments
+        "https://doc-chat-lyart.vercel.app",
+        "https://doc-chat-bhdilanka-gmailcoms-projects.vercel.app",
+        "https://doc-chat-git-main-bhdilanka-gmailcoms-projects.vercel.app",
         "localhost:3000",  # Local development
         "http://localhost:3000",  # Local development with HTTP
     ],
